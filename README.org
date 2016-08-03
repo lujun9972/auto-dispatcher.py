@@ -36,33 +36,37 @@
   import configparser
   import re
   import time
-
-  def get_section_by_package(package_regexp,config):
-      '''从config中找出匹配PACKAGE_REGEXP的section. config是ConfigParser.read后的结果'''
-      package_regexp = re.compile(package_regexp)
+  import sys
+  def get_section_by_package(package,config):
+      '''从config中找出匹配PACKAGE的section. config是ConfigParser.read后的结果'''
       for section in config.sections():
-          if package_regexp.match(section):
+          reg = re.compile(section)
+          if reg.match(package):
               return section
 
-  def get_ftp_info_by_package(package_regexp,cfg_file,netrc_file="~/.netrc"):
-      '''根据PACKAGE_REGEXP,从CFG_FILE及NETRC_FILE中找出对应ftp的HOST,LOGIN,ACCOUNT以及PASSWORD'''
+  def get_ftp_info_by_package(package,cfg_file,netrc_file=None):
+      '''根据PACKAGE,从CFG_FILE及NETRC_FILE中找出对应ftp的HOST,LOGIN,ACCOUNT以及PASSWORD'''
       config = configparser.ConfigParser()
       config.read(cfg_file)
-      netrc_info = netrc.netrc(netrc_file)
-      section = get_section_by_package(package_regexp,config)
+      section = get_section_by_package(package,config)
       if not section:
-          print("{0}中未找到匹配{1}的section".format(cfg_file,package_regexp),file=sys.sdterr)
-          exit -1
+          print("{0}中未找到匹配{1}的section".format(cfg_file,package),file=sys.stderr)
+          exit(-1)
       else:
+          try:
+              netrc_info = netrc.netrc(netrc_file)
+              login,account,password = netrc_info.authenticators(host)
+          except Exception:
+              login,account,password = None,None,None
           host = config.get(section,"host")
-          login,account,password = netrc_info.authenticators(host)
-          login = config.get(section,"login") or login
-          account = config.get(section,"account") or account
-          password = config.get(section,"password") or password
-          dest_dir = config.get(section,"dest_dir") or "~/newcx/{0}".format(time.strftime("%Y%m%d_%H%M%S"))
-
-      return host,login,account,password,dest_dir
+          login = config.get(section,"login",fallback=None) or login
+          account = config.get(section,"account",fallback=None) or account
+          password = config.get(section,"password",fallback=None) or password
+          dest_dir = config.get(section,"dest_dir",fallback=None) or "~/newcx/{0}".format(time.strftime("%Y%m%d_%H%M%S"))
+      return {"host":host,"login":login,"account":account,"password":password,"dest_dir":dest_dir}
 #+END_SRC
+
+#+RESULTS:
 
 ** 登录生产机并在指定目录下上传安装包
 
@@ -81,6 +85,8 @@
               ftp.storebinary("STOR {1}".format(os.path.basename(file_path)), file_hanlder)
       print("ftp {0} to {1}:{2} done".format(file_path,host,dest_dir))
 #+END_SRC
+
+#+RESULTS:
 
 若生产机开启ssh服务,则通过scp上传
 #+BEGIN_SRC python
@@ -101,6 +107,6 @@
 
 * Local Variables Setting:
 # Local Variables:
-# org-babel-default-header-args:python: ((:results . "output") (:exports . "code") (:cache))
+# org-babel-default-header-args:python: ((:session . "auto_dispatcher") (:results . "output") (:exports . "code") (:cache))
 # org-babel-python-command: "python3"
 # End:
