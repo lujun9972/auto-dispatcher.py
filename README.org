@@ -78,11 +78,15 @@
   def upload_by_ftp(file_path,host,dest_dir,login="anonymous",password="",account=""):
       '''update FILE_PATH to DEST_DIR in HOST,though ftp protocol'''
       with ftplib.FTP(host=host,user=login,passwd=password,acct=account) as ftp:
+          ftp.set_debuglevel(2)   # A value of 2 or higher produces the maximum amount of debugging output, logging each line sent and received on the control connection.
           print(ftp.getwelcome())
-          ftp.mkd(dest_dir)       # 创建目标文件夹
+          try:
+              ftp.mkd(dest_dir)       # 创建目标文件夹
+          except ftplib.error_perm:
+              print("{0}:{0} already exist".format(host,dest_dir))
           ftp.cwd(dest_dir)       # 进入目标文件夹
           with open(file_path,"rb") as file_handler:
-              ftp.storebinary("STOR {1}".format(os.path.basename(file_path)), file_hanlder)
+              ftp.storbinary("STOR {0}".format(os.path.basename(file_path)), file_handler)
       print("ftp {0} to {1}:{2} done".format(file_path,host,dest_dir))
 #+END_SRC
 
@@ -91,15 +95,17 @@
 若生产机开启ssh服务,则通过scp上传
 #+BEGIN_SRC python
   import subprocess
+  import io
   def upload_by_scp (file_path,host,dest_dir,login,password):
-      scp_command = "echo %{0} |scp {1} {2}@{3}:{4}/".format(password,file_path,login,host,dest_dir)
-      return subprocess.check_output(scp_command,shell=True)
+      scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
+      return subprocess.check_output(scp_command,shell=True,stdin=io.StringIO(password))
 
 #+END_SRC
 
+#+RESULTS:
+
 ** 调用生产机上的安装包
 #+BEGIN_SRC python
-  import io
   def execute_remote_command_by_ssh(host,login,password,command):
       ssh_command = "ssh {0}@{1} command"
       return subprocess.check_output(ssh_command,shell=True,stdin=io.StringIO(password))
