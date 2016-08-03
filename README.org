@@ -1,0 +1,106 @@
+#+TITLE: README
+#+AUTHOR: lujun9972
+#+CATEGORY: auto-dispatcher.py
+#+DATE: [2016-07-25 周一 10:07]
+#+OPTIONS: ^:{}
+
+* 功能
+当提交一个安装包到服务器上时,服务器自动根据包名称判断应该使用哪个用户FTP到哪台生产机上,并调用生产机上的升级程序进行升级.
+
+* 实现
+
+** 判断有新的安装包提交到服务器上
+有两种实现方式,一种是通过VC服务器上的Hook实现,该方法要求服务器上安装VC服务器. 另一种方式是通过扫描并对比前后文件树的差别来判断
+
+** 根据包名找出生产机的用户,地址和登录密码
+需要有一个配置文件(暂时命名为general-dispatch-info.cfg),该配置文件的每一个section的名称都是个正则表达式用于匹配安装包的名称.
+
+配置文件需要以下配置信息
+
++ 对应生产机IP,必选
++ 登录生产机的用户,可选,默认从 =~/.netrc= 中获取
++ 登录生产机的密码,可选,默认从 =~/.netrc= 中获取
++ 上传到生产机的目录,可选,默认为 =~/oldcx/年月日/=
+
+下面是配置文件的内容:
+#+BEGIN_SRC conf :tangle "general-dispatch-info.cfg"
+  [example]
+  host = 10.8.6.2
+  login = "ibpsusr"
+  password = "123456"
+#+END_SRC
+
+下面定义函数根据包名找出FTP的相关信息
+#+BEGIN_SRC python
+  import netrc
+  import configparser
+  import re
+  import time
+
+  def get_section_by_package(package_regexp,config):
+      '''从config中找出匹配PACKAGE_REGEXP的section. config是ConfigParser.read后的结果'''
+      package_regexp = re.compile(package_regexp)
+      for section in config.sections():
+          if package_regexp.match(section):
+              return section
+
+  def get_ftp_info_by_package(package_regexp,cfg_file,netrc_file="~/.netrc"):
+      '''根据PACKAGE_REGEXP,从CFG_FILE及NETRC_FILE中找出对应ftp的HOST,LOGIN,ACCOUNT以及PASSWORD'''
+      config = configparser.ConfigParser()
+      config.read(cfg_file)
+      netrc_info = netrc.netrc(netrc_file)
+      section = get_section_by_package(package_regexp,config)
+      if not section:
+          print("{0}中未找到匹配{1}的section".format(cfg_file,package_regexp),file=sys.sdterr)
+          exit -1
+      else:
+          host = config.get(section,"host")
+          login,account,password = netrc_info.authenticators(host)
+          login = config.get(section,"login") or login
+          account = config.get(section,"account") or account
+          password = config.get(section,"password") or password
+          dest_dir = config.get(section,"dest_dir") or "~/newcx/{0}".format(time.strftime("%Y%m%d_%H%M%S"))
+
+      return host,login,account,password,dest_dir
+#+END_SRC
+
+** 登录生产机并在指定目录下上传安装包
+
+若生产机开启FTP服务则通过ftp上传
+#+BEGIN_SRC python
+  import ftplib
+  import os.path
+
+  def upload_by_ftp(file_path,host,dest_dir,login="anonymous",password="",account=""):
+      '''update FILE_PATH to DEST_DIR in HOST,though ftp protocol'''
+      with ftplib.FTP(host=host,user=login,passwd=password,acct=account) as ftp:
+          print(ftp.getwelcome())
+          ftp.mkd(dest_dir)       # 创建目标文件夹
+          ftp.cwd(dest_dir)       # 进入目标文件夹
+          with open(file_path,"rb") as file_handler:
+              ftp.storebinary("STOR {1}".format(os.path.basename(file_path)), file_hanlder)
+      print("ftp {0} to {1}:{2} done".format(file_path,host,dest_dir))
+#+END_SRC
+
+若生产机开启ssh服务,则通过scp上传
+#+BEGIN_SRC python
+  import subprocess
+  def upload_by_scp (file_path,host,dest_dir,login,password):
+      scp_command = "echo %{0} |scp {1} {2}@{3}:{4}/".format(password,file_path,login,host,dest_dir)
+      return subprocess.check_output(scp_command,shell=True)
+
+#+END_SRC
+
+** 调用生产机上的安装包
+#+BEGIN_SRC python
+  import io
+  def execute_remote_command_by_ssh(host,login,password,command):
+      ssh_command = "ssh {0}@{1} command"
+      return subprocess.check_output(ssh_command,shell=True,stdin=io.StringIO(password))
+#+END_SRC
+
+* Local Variables Setting:
+# Local Variables:
+# org-babel-default-header-args:python: ((:results . "output") (:exports . "code") (:cache))
+# org-babel-python-command: "python3"
+# End:
