@@ -45,7 +45,9 @@
               return section
 
   def get_ftp_info_by_package(package,cfg_file,netrc_file=None):
-      '''根据PACKAGE,从CFG_FILE及NETRC_FILE中找出对应ftp的HOST,LOGIN,ACCOUNT以及PASSWORD'''
+      '''根据PACKAGE,从CFG_FILE及NETRC_FILE中找出对应ftp的HOST,LOGIN,ACCOUNT以及PASSWORD
+
+      return host,login,account,password,dest_dir,install_command'''
       config = configparser.ConfigParser()
       config.read(cfg_file)
       section = get_section_by_package(package,config)
@@ -63,7 +65,8 @@
           account = config.get(section,"account",fallback=None) or account
           password = config.get(section,"password",fallback=None) or password
           dest_dir = config.get(section,"dest_dir",fallback=None) or "~/newcx/{0}".format(time.strftime("%Y%m%d_%H%M%S"))
-      return {"host":host,"login":login,"account":account,"password":password,"dest_dir":dest_dir}
+          install_command = config.get(section,"install_command",fallback=None)
+      return host,login,account,password,dest_dir,install_command
 #+END_SRC
 
 #+RESULTS:
@@ -76,7 +79,7 @@
   import os.path
 
   def upload_by_ftp(file_path,host,dest_dir,login="anonymous",password="",account=""):
-      '''update FILE_PATH to DEST_DIR in HOST,though ftp protocol'''
+      '''upload FILE_PATH to DEST_DIR in HOST,though ftp protocol'''
       with ftplib.FTP(host=host,user=login,passwd=password,acct=account) as ftp:
           ftp.set_debuglevel(2)   # A value of 2 or higher produces the maximum amount of debugging output, logging each line sent and received on the control connection.
           print(ftp.getwelcome())
@@ -94,21 +97,62 @@
 
 若生产机开启ssh服务,则通过scp上传
 #+BEGIN_SRC python
-  import subprocess
-  import io
+  import pexpect
+
   def upload_by_scp (file_path,host,dest_dir,login,password):
+      '''upload FILE_PATH to DEST_DIR in HOST,by scp program'''
       scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
-      return subprocess.check_output(scp_command,shell=True,stdin=io.StringIO(password))
+      p = pexpect.spawn(scp_command)
+      while(p.isalive()):
+          idx = p.expect(['yes/no','password'])
+          if idx == 0:
+              p.sendline("yes")
+          else:
+              p.sendline(password)
+
+  # import pty
+  # def upload_by_scp_in_pty (file_path,host,dest_dir,login,password):
+  #     # scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
+  #     remote_dest_dir = "{0}@{1}:{2}/".format(login,host,dest_dir)
+  #     p = subprocess.Popen(["python3" "pty-process.py" "scp", file_path, remote_dest_dir], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+  #     result = p.communicate(password)
+  #     p.wait()
+  #     return result
 
 #+END_SRC
 
-#+RESULTS:
+上传时,优先使用scp上传,若失败则再换成通过ftp上传
+#+BEGIN_SRC python
+  def upload(file_path,host,dest_dir,login,password):
+      '''upload FILE_PATH to DEST_DIR in HOST'''
+      try:
+          upload_by_scp(file_path,host,dest_dir,login,password)
+      except:
+          upload_by_ftp(file_path,host,dest_dir,login,password)
+#+END_SRC
+
 
 ** 调用生产机上的安装包
 #+BEGIN_SRC python
   def execute_remote_command_by_ssh(host,login,password,command):
       ssh_command = "ssh {0}@{1} command"
-      return subprocess.check_output(ssh_command,shell=True,stdin=io.StringIO(password))
+      p = pexpect.spawn(ssh_command)
+      while(p.isalive()):
+          idx = p.expect(['yes/no','password'])
+          if idx == 0:
+              p.sendline("yes")
+          else:
+              p.sendline(password)
+#+END_SRC
+
+** 分发package
+#+BEGIN_SRC python
+  def dispatch(file_path,cfg_file="general-dispatch-info.cfg",netrc_file=None):
+      package = os.path.basename(file_path)
+      host,login,account,password,dest_dir,install_command = get_ftp_info_by_package(package,cfg_file,netrc_file)
+      upload(file_path,host,dest_dir,login,password)
+      if install_command:
+          execute_remote_command_by_ssh(host,login,password,install_command)
 #+END_SRC
 
 * Local Variables Setting:
