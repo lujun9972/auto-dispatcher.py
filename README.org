@@ -157,6 +157,6 @@
 
 * Local Variables Setting:
 # Local Variables:
-# org-babel-default-header-args:python: ((:session . "auto_dispatcher") (:results . "output") (:exports . "code") (:cache))
+# org-babel-default-header-args:python: ((:session . "auto_dispatcher") (:results . "output") (:exports . "code") (:cache) (:tangle . "auto-dispatcher.py"))
 # org-babel-python-command: "python3"
 # End:
