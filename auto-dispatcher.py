@@ -1,12 +1,8 @@
 import logging
-import logging.handlers
-LOGGING_FILE = "auto-dispatcher.log"
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-fh = logging.handlers.RotatingFileHandler(LOGGING_FILE,maxBytes=18*1024*1024,backupCount=5)
-formatter = logging.Formatter('%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s')
-fh.setFormatter(formatter)
-logger.addHandler(fh)
+import logging.config
+
+logging.config.fileConfig("logger.cfg")
+logger = logging.getLogger("main")
 
 import netrc
 import configparser
