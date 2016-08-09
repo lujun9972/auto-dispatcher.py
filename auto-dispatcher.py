@@ -99,9 +99,16 @@ def execute_remote_command_by_ssh(host,login,password,command):
         else:
             p.sendline(password)
 
-def dispatch(file_path,cfg_file="general-dispatch-info.cfg",netrc_file=None):
+def dispatch_file(file_path,cfg_file="general-dispatch-info.cfg",netrc_file=None):
     package = os.path.basename(file_path)
     host,login,account,password,dest_dir,install_command = get_ftp_info_by_package(package,cfg_file,netrc_file)
     upload(file_path,host,dest_dir,login,password)
     if install_command:
         execute_remote_command_by_ssh(host,login,password,install_command)
+
+import threading
+def dispatch_files(*file_paths,cfg_file="general-dispatch-info.cfg",netrc_file=None):
+    threads = (threading.Thread(target-dispatch_file,args=(file_path,cfg_file,netrc_file)) for file_path in file_paths)
+    for thread in threads:
+        thread.start()
+    return threads
