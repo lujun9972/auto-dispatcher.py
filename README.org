@@ -47,6 +47,7 @@
 
 从logger.cfg中读取logger配置
 #+BEGIN_SRC python 
+  # -*- coding: utf-8 -*-
   import logging
   import logging.config
 
@@ -60,6 +61,50 @@
 ** 判断有新的安装包提交到服务器上
 有两种实现方式,一种是通过VC服务器上的Hook实现,该方法要求服务器上安装VC服务器. 另一种方式是通过扫描并对比前后文件树的差别来判断
 
++ 通过svnlook changed来查询某次提交更改的文件
+  #+BEGIN_SRC sh :tangle "post-commit"
+    REPOS_PATH=$1
+    REVISION=$2
+    files=$(svnlook changed ${REPOS_PATH} -r ${REVISION}|egrep -v "^D"|egrep -v "/$"|cut -f2)
+    auto-dispatcher.py $files
+  #+END_SRC
++ 扫描并对比前后文件树的差别
+  #+BEGIN_SRC python :tangle "auto_dispatcher.py"
+    import os
+    import os.path
+    import time
+    from dispatcher import dispatch_files
+    def directory_files(directory):
+        '''Return a list of full paths of files in DIRECTORY.'''
+        results=[]
+        for root,dirs,files in os.walk(directory):
+            full_paths=[os.path.join(root,f) for f in files]
+            results.extend(full_paths)
+        return results
+
+    def directory_files_and_size(directory):
+        '''Return a list of full paths and sizes of files in DIRECTORY.'''
+        files = directory_files(directory)
+        files_and_sizes = set([(f,os.path.getsize(f)) for f in files])
+        return files_and_sizes
+
+    def directory_files_until_nochange(directory,interval=5):
+        old = directory_files_and_size(directory)
+        time.sleep(interval)
+        new = directory_files_and_size(directory)
+        while old != new:
+            old,new = new,directory_files_and_size(directory)
+        return [file_and_size[0] for file_and_size in new]
+
+    if __name__ == "__main__":
+        directory=sys.argv[1]
+        while True:
+            old = directory_files(directory)
+            new = directory_files_until_nochange(directory)
+            diff = new - old
+            dispatcher_files(diff)
+            sleep(60)
+  #+END_SRC
 ** 根据包名找出生产机的用户,地址和登录密码
 需要有一个配置文件(暂时命名为general-dispatch-info.cfg),该配置文件的每一个section的名称都是个正则表达式用于匹配安装包的名称.
 
@@ -146,31 +191,33 @@
 
 若生产机开启ssh服务,则通过scp上传
 #+BEGIN_SRC python
-  import pexpect
-
-  def upload_by_scp (file_path,host,dest_dir,login,password):
-      '''upload FILE_PATH to DEST_DIR in HOST,by scp program'''
-      scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
-      logger.debug("execute:%s",scp_command)
-      p = pexpect.spawn(scp_command)
-      while(p.isalive()):
-          idx = p.expect(['yes/no','password'])
-          if idx == 0:
-              p.sendline("yes")
-          else:
-              p.sendline(password)
-
-  # import pty
-  # import subprocess
-  # def upload_by_scp_in_pty (file_path,host,dest_dir,login,password):
-  #     # scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
-  #     remote_dest_dir = "{0}@{1}:{2}/".format(login,host,dest_dir)
-  #     p = subprocess.Popen(["pty-process.py" "scp", file_path, remote_dest_dir], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-  #     result = p.communicate(password)
-  #     p.wait()
-  #     return result
+  try:
+      import pexpect
+      def upload_by_scp (file_path,host,dest_dir,login,password):
+          '''upload FILE_PATH to DEST_DIR in HOST,by scp program'''
+          scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
+          logger.debug("execute:%s",scp_command)
+          p = pexpect.spawn(scp_command)
+          while(p.isalive()):
+              idx = p.expect(['yes/no','password'])
+              if idx == 0:
+                  p.sendline("yes")
+              else:
+                  p.sendline(password)
+  except Exception:
+      import pty
+      import subprocess
+      def upload_by_scp_in_pty (file_path,host,dest_dir,login,password):
+          # scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
+          remote_dest_dir = "{0}@{1}:{2}/".format(login,host,dest_dir)
+          p = subprocess.Popen(["python3","pty-process.py","scp", file_path, remote_dest_dir], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          result = p.communicate(password.encode())
+          p.wait()
+          return result
 
 #+END_SRC
+
+#+RESULTS:
 
 
 上传时,优先使用scp上传,若失败则再换成通过ftp上传
@@ -208,15 +255,21 @@
           execute_remote_command_by_ssh(host,login,password,install_command)
 
   import threading
-  def dispatch_files(*file_paths,cfg_file="general-dispatch-info.cfg",netrc_file=None):
+  def dispatch_files(file_paths,cfg_file="general-dispatch-info.cfg",netrc_file=None):
       threads = (threading.Thread(target-dispatch_file,args=(file_path,cfg_file,netrc_file)) for file_path in file_paths)
       for thread in threads:
           thread.start()
       return threads
 #+END_SRC
 
+** main
+#+BEGIN_SRC python
+  if __name__ = "__main__"
+      dispatch_files(sys.argv[1:])
+#+END_SRC
+
 * Local Variables Setting:
 # Local Variables:
-# org-babel-default-header-args:python: ((:session . "auto_dispatcher") (:results . "output") (:exports . "code") (:cache) (:tangle . "auto-dispatcher.py"))
+# org-babel-default-header-args:python: ((:session . "auto_dispatcher") (:results . "output") (:exports . "code") (:cache) (:tangle . "dispatcher.py"))
 # org-babel-python-command: "python3"
 # End:

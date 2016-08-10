@@ -1,0 +1,4 @@
+REPOS_PATH=$1
+REVISION=$2
+files=$(svnlook changed ${REPOS_PATH} -r ${REVISION}|egrep -v "^D"|egrep -v "/$"|cut -f2)
+auto-dispatcher.py $files

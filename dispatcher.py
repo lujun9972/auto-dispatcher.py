@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import logging
 import logging.config
 
@@ -57,29 +58,29 @@ def upload_by_ftp(file_path,host,dest_dir,login="anonymous",password="",account=
             ftp.storbinary("STOR {0}".format(os.path.basename(file_path)), file_handler)
     logger.debug("ftp {0} to {1}:{2} done".format(file_path,host,dest_dir))
 
-import pexpect
-
-def upload_by_scp (file_path,host,dest_dir,login,password):
-    '''upload FILE_PATH to DEST_DIR in HOST,by scp program'''
-    scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
-    logger.debug("execute:%s",scp_command)
-    p = pexpect.spawn(scp_command)
-    while(p.isalive()):
-        idx = p.expect(['yes/no','password'])
-        if idx == 0:
-            p.sendline("yes")
-        else:
-            p.sendline(password)
-
-# import pty
-# import subprocess
-# def upload_by_scp_in_pty (file_path,host,dest_dir,login,password):
-#     # scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
-#     remote_dest_dir = "{0}@{1}:{2}/".format(login,host,dest_dir)
-#     p = subprocess.Popen(["pty-process.py" "scp", file_path, remote_dest_dir], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-#     result = p.communicate(password)
-#     p.wait()
-#     return result
+try:
+    import pexpect
+    def upload_by_scp (file_path,host,dest_dir,login,password):
+        '''upload FILE_PATH to DEST_DIR in HOST,by scp program'''
+        scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
+        logger.debug("execute:%s",scp_command)
+        p = pexpect.spawn(scp_command)
+        while(p.isalive()):
+            idx = p.expect(['yes/no','password'])
+            if idx == 0:
+                p.sendline("yes")
+            else:
+                p.sendline(password)
+except Exception:
+    import pty
+    import subprocess
+    def upload_by_scp_in_pty (file_path,host,dest_dir,login,password):
+        # scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
+        remote_dest_dir = "{0}@{1}:{2}/".format(login,host,dest_dir)
+        p = subprocess.Popen(["python3","pty-process.py","scp", file_path, remote_dest_dir], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = p.communicate(password.encode())
+        p.wait()
+        return result
 
 def upload(file_path,host,dest_dir,login,password):
     '''upload FILE_PATH to DEST_DIR in HOST'''
@@ -107,8 +108,11 @@ def dispatch_file(file_path,cfg_file="general-dispatch-info.cfg",netrc_file=None
         execute_remote_command_by_ssh(host,login,password,install_command)
 
 import threading
-def dispatch_files(*file_paths,cfg_file="general-dispatch-info.cfg",netrc_file=None):
+def dispatch_files(file_paths,cfg_file="general-dispatch-info.cfg",netrc_file=None):
     threads = (threading.Thread(target-dispatch_file,args=(file_path,cfg_file,netrc_file)) for file_path in file_paths)
     for thread in threads:
         thread.start()
     return threads
+
+if __name__ = "__main__"
+    dispatch_files(sys.argv[1:])
