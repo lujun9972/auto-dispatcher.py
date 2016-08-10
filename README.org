@@ -49,7 +49,10 @@
         return [file_and_size[0] for file_and_size in new]
 
     if __name__ == "__main__":
-        directory=sys.argv[1]
+        try:
+            directory = sys.argv[1]
+        except IndexError:
+            directory = os.getcwd()
         while True:
             old = directory_files(directory)
             new = directory_files_until_nochange(directory)
