@@ -21,6 +21,7 @@ def directory_files_until_nochange(directory,interval=5):
     time.sleep(interval)
     new = directory_files_and_size(directory)
     while old != new:
+        time.sleep(interval)
         old,new = new,directory_files_and_size(directory)
     return [file_and_size[0] for file_and_size in new]
 
