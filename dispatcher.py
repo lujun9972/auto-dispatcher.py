@@ -114,5 +114,8 @@ def dispatch_files(file_paths,cfg_file="general-dispatch-info.cfg",netrc_file=No
         thread.start()
     return threads
 
-if __name__ = "__main__"
-    dispatch_files(sys.argv[1:])
+if __name__ = "__main__":
+    if len(sys.argv) == 2:
+        dispatch_file(sys.argv[1])
+    else:
+        dispatch_files(sys.argv[1:])

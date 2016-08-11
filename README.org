@@ -124,7 +124,7 @@
 + 对应生产机IP,必选
 + 登录生产机的用户,可选,默认从 =~/.netrc= 中获取
 + 登录生产机的密码,可选,默认从 =~/.netrc= 中获取
-+ 上传到生产机的目录,可选,默认为 =~/newcx/年月日/=
++ 上传到生产机的目录,可选,默认为 =~/newcx/年月日_时分秒/=
 
 下面是配置文件的内容:
 #+BEGIN_SRC conf :tangle "general-dispatch-info.cfg"
@@ -275,8 +275,11 @@
 
 *** main
 #+BEGIN_SRC python
-  if __name__ = "__main__"
-      dispatch_files(sys.argv[1:])
+  if __name__ = "__main__":
+      if len(sys.argv) == 2:
+          dispatch_file(sys.argv[1])
+      else:
+          dispatch_files(sys.argv[1:])
 #+END_SRC
 
 * Local Variables Setting:
