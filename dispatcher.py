@@ -74,12 +74,10 @@ try:
 except Exception:
     import pty
     import subprocess
-    def upload_by_scp_in_pty (file_path,host,dest_dir,login,password):
-        # scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
-        remote_dest_dir = "{0}@{1}:{2}/".format(login,host,dest_dir)
-        p = subprocess.Popen(["python3","pty-process.py","scp", file_path, remote_dest_dir], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        result = p.communicate(password.encode())
-        p.wait()
+    def upload_by_scp (file_path,host,dest_dir,login,password):
+        execute_remote_command_by_ssh(host,login,password,"mkdir -p {}".format(dest_dir))
+        scp_command = "echo {4} |python3 pty-process.py scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir,password)
+        result = subprocess.check_output(scp_command,shell=True)
         return result
 
 def upload(file_path,host,dest_dir,login,password):
@@ -89,16 +87,25 @@ def upload(file_path,host,dest_dir,login,password):
     except:
         upload_by_ftp(file_path,host,dest_dir,login,password)
 
-def execute_remote_command_by_ssh(host,login,password,command):
-    ssh_command = "ssh {0}@{1} command"
-    logger.debug("execute:%s",ssh_command)
-    p = pexpect.spawn(ssh_command)
-    while(p.isalive()):
-        idx = p.expect(['yes/no','password'])
-        if idx == 0:
-            p.sendline("yes")
-        else:
-            p.sendline(password)
+try:
+    import pexpect
+    def execute_remote_command_by_ssh(host,login,password,command):
+        ssh_command = "ssh {}@{} {}".format(password,login,host,command)
+        logger.debug("execute:%s",ssh_command)
+        p = pexpect.spawn(ssh_command)
+        while(p.isalive()):
+            idx = p.expect(['yes/no','password'])
+            if idx == 0:
+                p.sendline("yes")
+            else:
+                p.sendline(password)
+except Exception:
+    def execute_remote_command_by_ssh(host,login,password,command):
+        ssh_command = "echo {} | python3 pty-process.py ssh {}@{} '{}'".format(password,login,host,command)
+        logger.debug("execute:%s",ssh_command)
+        result = subprocess.check_output(ssh_command,shell=True)
+        logger.debug("result:%s",result)
+        return result
 
 def dispatch_file(file_path,cfg_file="general-dispatch-info.cfg",netrc_file=None):
     package = os.path.basename(file_path)
@@ -114,7 +121,7 @@ def dispatch_files(file_paths,cfg_file="general-dispatch-info.cfg",netrc_file=No
         thread.start()
     return threads
 
-if __name__ = "__main__":
+if __name__ == "__main__":
     if len(sys.argv) == 2:
         dispatch_file(sys.argv[1])
     else:
