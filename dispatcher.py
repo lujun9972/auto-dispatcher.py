@@ -116,7 +116,7 @@ def dispatch_file(file_path,cfg_file="general-dispatch-info.cfg",netrc_file=None
 
 import threading
 def dispatch_files(file_paths,cfg_file="general-dispatch-info.cfg",netrc_file=None):
-    threads = (threading.Thread(target-dispatch_file,args=(file_path,cfg_file,netrc_file)) for file_path in file_paths)
+    threads = (threading.Thread(target=dispatch_file,args=(file_path,cfg_file,netrc_file)) for file_path in file_paths)
     for thread in threads:
         thread.start()
     return threads
