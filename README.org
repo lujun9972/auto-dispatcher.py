@@ -128,9 +128,14 @@
 
 下面是配置文件的内容:
 #+BEGIN_SRC conf :tangle "general-dispatch-info.cfg"
-  [example]
+  [ibps]
   host = 10.8.6.2
   login = "ibpsusr"
+  password = "123456"
+
+  [cnaps2]
+  host = 10.8.6.10
+  login = "cnaps2"
   password = "123456"
 #+END_SRC
 
