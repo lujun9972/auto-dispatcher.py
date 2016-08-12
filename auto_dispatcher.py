@@ -8,6 +8,7 @@ def directory_files(directory):
     results=[]
     for root,dirs,files in os.walk(directory):
         full_paths=[os.path.join(root,f) for f in files]
+        full_paths = [f for f in full_paths if os.path.isfile(f)]
         results.extend(full_paths)
     return set(results)
 
