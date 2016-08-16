@@ -58,27 +58,13 @@ def upload_by_ftp(file_path,host,dest_dir,login="anonymous",password="",account=
             ftp.storbinary("STOR {0}".format(os.path.basename(file_path)), file_handler)
     logger.debug("ftp {0} to {1}:{2} done".format(file_path,host,dest_dir))
 
-try:
-    import pexpect
-    def upload_by_scp (file_path,host,dest_dir,login,password):
-        '''upload FILE_PATH to DEST_DIR in HOST,by scp program'''
-        scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
-        logger.debug("execute:%s",scp_command)
-        p = pexpect.spawn(scp_command)
-        while(p.isalive()):
-            idx = p.expect(['yes/no','password'])
-            if idx == 0:
-                p.sendline("yes")
-            else:
-                p.sendline(password)
-except Exception:
-    import pty
-    import subprocess
-    def upload_by_scp (file_path,host,dest_dir,login,password):
-        execute_remote_command_by_ssh(host,login,password,"mkdir -p {}".format(dest_dir))
-        scp_command = "echo {4} |python3 pty-process.py scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir,password)
-        result = subprocess.check_output(scp_command,shell=True)
-        return result
+import pty
+import subprocess
+def upload_by_scp (file_path,host,dest_dir,login,password):
+    execute_remote_command_by_ssh(host,login,password,"mkdir -p {}".format(dest_dir))
+    scp_command = "echo {4} |python3 pty-process.py scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir,password)
+    result = subprocess.check_output(scp_command,shell=True)
+    return result
 
 def upload(file_path,host,dest_dir,login,password):
     '''upload FILE_PATH to DEST_DIR in HOST'''
@@ -87,25 +73,12 @@ def upload(file_path,host,dest_dir,login,password):
     except:
         upload_by_ftp(file_path,host,dest_dir,login,password)
 
-try:
-    import pexpect
-    def execute_remote_command_by_ssh(host,login,password,command):
-        ssh_command = "ssh {}@{} {}".format(password,login,host,command)
-        logger.debug("execute:%s",ssh_command)
-        p = pexpect.spawn(ssh_command)
-        while(p.isalive()):
-            idx = p.expect(['yes/no','password'])
-            if idx == 0:
-                p.sendline("yes")
-            else:
-                p.sendline(password)
-except Exception:
-    def execute_remote_command_by_ssh(host,login,password,command):
-        ssh_command = "echo {} | python3 pty-process.py ssh {}@{} '{}'".format(password,login,host,command)
-        logger.debug("execute:%s",ssh_command)
-        result = subprocess.check_output(ssh_command,shell=True)
-        logger.debug("result:%s",result)
-        return result
+def execute_remote_command_by_ssh(host,login,password,command):
+    ssh_command = "echo {} | python3 pty-process.py ssh {}@{} '{}'".format(password,login,host,command)
+    logger.debug("execute:%s",ssh_command)
+    result = subprocess.check_output(ssh_command,shell=True)
+    logger.debug("result:%s",result)
+    return result
 
 def dispatch_file(file_path,cfg_file="general-dispatch-info.cfg",netrc_file=None):
     package = os.path.basename(file_path)

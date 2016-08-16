@@ -15,7 +15,7 @@ def directory_files(directory):
 def directory_files_and_size(directory):
     '''Return a set of full paths and sizes of files in DIRECTORY.'''
     files = directory_files(directory)
-    files_and_sizes = set([(f,os.path.getsize(f)) for f in files])
+    files_and_sizes = set([(f,os.path.getsize(f)) for f in files if os.path.isfile(f)])
     return files_and_sizes
 
 def directory_files_until_nochange(directory,interval=5):
