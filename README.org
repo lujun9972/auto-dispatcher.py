@@ -11,6 +11,8 @@
 脚本分成两部分,一部分专门检查是否有安装包提交到服务器上,并找出哪些文件是新提交的.
 第二部分根据配置信息上传新提交的文件并执行相应的更像脚本.
 
+*由于生产环境不连外网,因此不能使用第三方库!*
+
 * 实现
 ** 判断有新的安装包提交到服务器上
 
@@ -42,7 +44,7 @@
     def directory_files_and_size(directory):
         '''Return a set of full paths and sizes of files in DIRECTORY.'''
         files = directory_files(directory)
-        files_and_sizes = set([(f,os.path.getsize(f)) for f in files])
+        files_and_sizes = set([(f,os.path.getsize(f)) for f in files if os.path.isfile(f)])
         return files_and_sizes
 
     def directory_files_until_nochange(directory,interval=5):
@@ -187,7 +189,52 @@
 
 *** 登录生产机并在指定目录下上传安装包
 
-若生产机开启FTP服务则通过ftp上传
+**** 若生产机开启ssh服务,则通过scp上传
+
+但是这里遇到两个问题,第一个问题是,执行像ssh,scp这类secure command时,必须手工输入密码,而且它们是直接从控制终端而不是stdin中读取密码的,这也意味着无法通过脚本的方式传送密码給这些程序.
+万幸的是,python中有个名为 =pty= 的modual,它有一个 =spawn= 函数,manual中对它的描述是:
+#+BEGIN_QUOTE
+pty.spawn(argv[, master_read[, stdin_read]]) 
+    Spawn a process, and connect its controlling terminal with the current process’s standard io. This is often used to baffle programs which insist on reading from the controlling terminal.
+#+END_QUOTE
+这就好办了,我们只要创建一个名为"pty-process.py"脚本,在这个脚本中用pty.spawn调用secure command,然后再通过写入该脚本stdin的方式就可以变相地給这些secure command发送密码了.
+
+pty-process.py脚本的实现如下:
+#+BEGIN_SRC python :tangle "pty-process.py"
+  #!/bin/env python3
+  import pty
+  import sys
+
+  pty.spawn(sys.argv[1:])
+#+END_SRC
+
+借助于这个pty-process.py我们可以实现一个函数用于执行secure command
+#+BEGIN_SRC python
+  def execute_externel_secure_command(command,password=""):
+      secure_command = "echo {} |python3 pty-process.py {}".format(passowrd,command)
+      logger.debug("execute:%s",secure_command)
+      result = subprocess.check_output(secure_command,shell=True)
+      logger.debug("result:%s",result)
+      return result
+#+END_SRC
+
+第二个问题是scp并不能自动在远程创建新目录,需要先在远程手工创建目录. 这个解决方案也很简单,直接通过ssh登录远程服务器执行mkdir命令就行:
+#+BEGIN_SRC python
+  def execute_remote_command_by_ssh(host,login,password,command):
+      ssh_command = "ssh {}@{} '{}'".format(login,host,command)
+      return execute_externel_secure_command(password,ssh_command)
+#+END_SRC
+
+最后通过scp上传文件的实现为:
+#+BEGIN_SRC python
+  import subprocess
+  def upload_by_scp (file_path,host,dest_dir,login,password):
+      execute_remote_command_by_ssh(host,login,password,"mkdir -p {}".format(dest_dir))
+      scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir,password)
+      return execute_externel_secure_command(password,scp_command)
+#+END_SRC
+
+**** 若生产机开启FTP服务则通过ftp上传
 #+BEGIN_SRC python
   import ftplib
   import os.path
@@ -207,38 +254,8 @@
       logger.debug("ftp {0} to {1}:{2} done".format(file_path,host,dest_dir))
 #+END_SRC
 
-#+RESULTS:
 
-若生产机开启ssh服务,则通过scp上传
-#+BEGIN_SRC python
-  try:
-      import pexpect
-      def upload_by_scp (file_path,host,dest_dir,login,password):
-          '''upload FILE_PATH to DEST_DIR in HOST,by scp program'''
-          scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir)
-          logger.debug("execute:%s",scp_command)
-          p = pexpect.spawn(scp_command)
-          while(p.isalive()):
-              idx = p.expect(['yes/no','password'])
-              if idx == 0:
-                  p.sendline("yes")
-              else:
-                  p.sendline(password)
-  except Exception:
-      import pty
-      import subprocess
-      def upload_by_scp (file_path,host,dest_dir,login,password):
-          execute_remote_command_by_ssh(host,login,password,"mkdir -p {}".format(dest_dir))
-          scp_command = "echo {4} |python3 pty-process.py scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir,password)
-          result = subprocess.check_output(scp_command,shell=True)
-          return result
-
-#+END_SRC
-
-#+RESULTS:
-
-
-上传时,优先使用scp上传,若失败则再换成通过ftp上传
+**** 上传时,优先使用scp上传,若失败则再换成通过ftp上传
 #+BEGIN_SRC python
   def upload(file_path,host,dest_dir,login,password):
       '''upload FILE_PATH to DEST_DIR in HOST'''
@@ -249,28 +266,8 @@
 #+END_SRC
 
 
-*** 调用生产机上的安装包
-#+BEGIN_SRC python
-  try:
-      import pexpect
-      def execute_remote_command_by_ssh(host,login,password,command):
-          ssh_command = "ssh {}@{} {}".format(password,login,host,command)
-          logger.debug("execute:%s",ssh_command)
-          p = pexpect.spawn(ssh_command)
-          while(p.isalive()):
-              idx = p.expect(['yes/no','password'])
-              if idx == 0:
-                  p.sendline("yes")
-              else:
-                  p.sendline(password)
-  except Exception:
-      def execute_remote_command_by_ssh(host,login,password,command):
-          ssh_command = "echo {} | python3 pty-process.py ssh {}@{} '{}'".format(password,login,host,command)
-          logger.debug("execute:%s",ssh_command)
-          result = subprocess.check_output(ssh_command,shell=True)
-          logger.debug("result:%s",result)
-          return result
-#+END_SRC
+*** 调用生产机上的升级程序
+只需要用上面定义的 =execute_remote_command_by_ssh= 就能实现调用生产机上的升级程序了.
 
 *** 分发package
 #+BEGIN_SRC python
