@@ -211,7 +211,7 @@ pty-process.py脚本的实现如下:
 借助于这个pty-process.py我们可以实现一个函数用于执行secure command
 #+BEGIN_SRC python
   def execute_externel_secure_command(command,password=""):
-      secure_command = "echo {} |python3 pty-process.py {}".format(passowrd,command)
+      secure_command = "echo {} |python3 pty-process.py {}".format(password,command)
       logger.debug("execute:%s",secure_command)
       result = subprocess.check_output(secure_command,shell=True)
       logger.debug("result:%s",result)
@@ -222,7 +222,7 @@ pty-process.py脚本的实现如下:
 #+BEGIN_SRC python
   def execute_remote_command_by_ssh(host,login,password,command):
       ssh_command = "ssh {}@{} '{}'".format(login,host,command)
-      return execute_externel_secure_command(password,ssh_command)
+      return execute_externel_secure_command(ssh_command,password)
 #+END_SRC
 
 最后通过scp上传文件的实现为:
@@ -231,7 +231,7 @@ pty-process.py脚本的实现如下:
   def upload_by_scp (file_path,host,dest_dir,login,password):
       execute_remote_command_by_ssh(host,login,password,"mkdir -p {}".format(dest_dir))
       scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir,password)
-      return execute_externel_secure_command(password,scp_command)
+      return execute_externel_secure_command(scp_command,password)
 #+END_SRC
 
 **** 若生产机开启FTP服务则通过ftp上传

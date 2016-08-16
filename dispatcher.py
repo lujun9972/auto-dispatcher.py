@@ -42,7 +42,7 @@ def get_ftp_info_by_package(package,cfg_file,netrc_file=None):
     return host,login,account,password,dest_dir,install_command
 
 def execute_externel_secure_command(command,password=""):
-    secure_command = "echo {} |python3 pty-process.py {}".format(passowrd,command)
+    secure_command = "echo {} |python3 pty-process.py {}".format(password,command)
     logger.debug("execute:%s",secure_command)
     result = subprocess.check_output(secure_command,shell=True)
     logger.debug("result:%s",result)
@@ -50,13 +50,13 @@ def execute_externel_secure_command(command,password=""):
 
 def execute_remote_command_by_ssh(host,login,password,command):
     ssh_command = "ssh {}@{} '{}'".format(login,host,command)
-    return execute_externel_secure_command(password,ssh_command)
+    return execute_externel_secure_command(ssh_command,password)
 
 import subprocess
 def upload_by_scp (file_path,host,dest_dir,login,password):
     execute_remote_command_by_ssh(host,login,password,"mkdir -p {}".format(dest_dir))
     scp_command = "scp {0} {1}@{2}:{3}/".format(file_path,login,host,dest_dir,password)
-    return execute_externel_secure_command(password,scp_command)
+    return execute_externel_secure_command(scp_command,password)
 
 import ftplib
 import os.path
